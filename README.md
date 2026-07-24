@@ -1,36 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LongGrind
 
-## Getting Started
+LongGrind 是一个面向锦标赛玩家的扑克长期记录工具，用来把牌局流水、维度统计、资金曲线和手牌复盘放在同一个工作台里。当前应用不再使用独立首页，品牌入口直接进入牌局页，主导航包含「牌局 / 统计 / 资金 / 复盘」四个核心页面。
 
-First, run the development server:
+## 当前页面
+
+| 页面 | 路径 | 主要用途 |
+| --- | --- | --- |
+| 牌局 | `/records` | 录入、编辑、结算每场比赛，并作为统计和资金曲线的数据入口。 |
+| 统计 | `/stats` | 按日期、比赛类型、开始级别、实际买入拆分牌局表现。 |
+| 资金 | `/bankroll` | 汇总资金关键指标，并展示累计净结果折线。 |
+| 复盘 | `/review` | 按手牌和街道记录行动线、公共牌、玩家画像与复盘想法。 |
+
+## 页面内容
+
+### 牌局页 `/records`
+
+牌局页负责管理每一场比赛记录，是 LongGrind 的基础数据来源。
+
+- 新增牌局：填写比赛名称、类型、开赛日期与时间、买入金额、当前级别 BB、买入方式和备注。
+- 比赛类型：支持每日特别赛、GG大师赛、赏金猎人赛、每日急速赛、生肖赛、神秘赏金赛、卫星赛、多日赛；旧的「急速赛」会归一到「每日急速赛」。
+- 日期时间：通过日历和小时、分钟滚轮选择开赛时间；列表会展示日期、星期、时间、当前级别和已结束比赛的持续时长。
+- 币种处理：买入方式支持 `$` 和 `￥`。人民币记录会读取 USD/CNY 汇率，并按美元口径保存，保证统计页和资金页口径统一。
+- 牌局列表：分页展示全部记录，顶部显示当前记录累计结果；每条记录展示名称、类型、状态、时间、BB 和最终结果。
+- 状态展示：根据开赛时间和结算状态区分未开始、进行中、已结束；进行中的赏金赛会显示当前累计赏金。
+- 编辑与删除：可修改基础信息和备注，未开始比赛可取消，已有记录可删除；删除已结算记录时会同步移除对应资金点。
+- 结算比赛：进行中的比赛可填写结束时间、是否进入钱圈、战绩、名次、实际人数；赏金赛还可以补充新增赏金。
+- 赏金口径：赏金猎人赛和神秘赏金赛会单独累加赏金；没进钱圈但获得赏金时，奖金和净结果也会保留赏金部分。
+- 资金同步：比赛结算后会写入 `/api/profit` 的资金曲线数据；如果记录被改回未结束或删除，对应资金点也会重新计算或移除。
+
+### 统计页 `/stats`
+
+统计页用于把牌局记录拆成多个维度，帮助观察哪些场景更稳定、哪些区间波动更大。页面由 `src/app/stats/page.tsx` 读取服务端 cookie 中的上次视图，再交给 `StatsClient` 渲染交互表格。
+
+- 统计方式：顶部切换日期、比赛类型、开始级别、买入档位四种视图。
+- 日期维度：按开赛日期汇总，展示比赛场次、进钱圈场次、总买入、总战绩、利润、投资回报比和比赛时间。
+- 类型维度：按比赛类型汇总，并补齐项目内定义的全部赛事类型；即使某个类型暂时没有已结束比赛，也会保留空行方便对照。
+- 开始级别：按 `100BB+`、`50BB-100BB`、`40BB-50BB`、`30BB-40BB`、`20BB-30BB`、`10BB-20BB`、`≤10BB` 分桶统计。
+- 买入档位：不再使用固定区间，而是按原始买入金额聚合，例如 `$15` 或 `￥108`；人民币买入会使用保存时的汇率还原原始金额。
+- 分页规则：日期和买入档位视图每页 10 行，提供上一页 / 下一页；比赛类型和开始级别直接展示完整列表。
+- 视图记忆：当前统计方式会写入 `localStorage` 和 `SameSite=Lax` cookie，刷新页面后保持上次选择。
+- 统计口径：只把已结束比赛计入奖金、利润、进钱圈和 ROI；未结束记录只参与总场次数，没有已结束比赛的行用 `--` 展示。
+- 数据状态：读取 `/api/records`，初始化和加载中显示骨架行；没有对应维度或读取失败时显示空状态或错误信息。
+
+### 资金页 `/bankroll`
+
+资金页保留最重要的资金状态和长期曲线，适合快速查看当前 bankroll 走势。
+
+- 数据来源：从 `/api/records` 读取已结算比赛统计，从 `/api/profit` 读取累计资金曲线。
+- 顶部指标：展示累计净结果、投资回报比、最大奖金、进奖金圈、最高买入和最低买入。
+- 净结果口径：普通赛事按比赛结果计算；赏金赛事会把赏金计入净结果，没进钱圈但获得赏金时也会被纳入。
+- 资金曲线：按比赛结束时间绘制累计总战绩折线，横轴为累计比赛场数，纵轴以零轴区分盈利和亏损。
+- 曲线阅读：关键节点可悬停或聚焦查看「第 N 场」结束后的累计结果，末端标出最新累计值。
+- 空状态与错误状态：资金曲线读取中、暂无资金曲线、资金数据读取失败都会有对应提示。
+
+### 复盘页 `/review`
+
+复盘页用于把单手牌拆成完整行动线，记录从翻前到河牌的决策过程。
+
+- 复盘列表：左侧分页展示已保存手牌，卡片显示英雄手牌和底池信息，可选择查看或删除。
+- 新增手牌：先选择两张英雄手牌，再依次进入 Preflop、Flop、Turn、River 的分步录入流程。
+- 桌况设置：翻前阶段可选择当前人数、我的位置，并填写 SB、BB、Ante。
+- 行动录入：按位置队列确认行动，支持弃牌、过牌、跟注、下注、加注和 All-in。
+- 筹码换算：输入行动前筹码和本轮或本街总投入后，页面会维护筹码数、BB 数、玩家剩余筹码和底池变化。
+- 玩家画像与我的想法：英雄行动记录「我的想法」，非英雄位置可补充玩家画像。
+- 公共牌选择：Flop、Turn、River 通过牌面矩阵选择公共牌，并自动阻止重复选择英雄手牌。
+- 行动线预览：录入过程中实时展示每一步行动和行动后的底池，支持上一步、重置当前阶段、返回前一阶段和重新选择手牌。
+- 复盘详情：已保存手牌按 Preflop、Flop、Turn、River 展示公共牌、行动序列、在池筹码、下注尺度、我的想法和 GTO 想法。
+- GTO 想法编辑：每条街的 GTO 想法都可以在详情页单独编辑并保存。
+
+## 数据与接口
+
+- `/api/records`：牌局记录的读取、新增、修改、替换和删除，存储在 Vercel Blob 的 `data/record.json`。
+- `/api/reviews`：手牌复盘的读取、新增、修改、替换和删除，存储在 Vercel Blob 的 `data/review.json`。
+- `/api/profit`：资金曲线读取，资金点会在牌局结算或删除时同步更新，存储在 `data/profit.json`。
+- `/api/exchange-rate`：通过 Frankfurter 的 USD/CNY 汇率接口换算人民币买入和结算金额。
+
+## 技术栈
+
+- Next.js `16.2.10`
+- React `19.2.4`
+- TypeScript
+- Tailwind CSS `4`
+- Vercel Blob
+
+## 开发
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+打开 [http://localhost:3000](http://localhost:3000) 查看本地页面。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+常用命令：
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build
+npm run lint
+```
