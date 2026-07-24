@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "LongGrind",
-  description: "A poker field journal for bankroll, videos, travel logs, and review notes.",
+  description: "德州扑克牌局记录、统计、资金曲线和手牌复盘工具。",
   icons: {
     icon: [
       { url: "/favicon.ico" },
